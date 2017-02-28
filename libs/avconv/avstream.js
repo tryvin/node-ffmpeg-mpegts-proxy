@@ -9,6 +9,10 @@ function AvStream(options) {
         return new AvStream(options);
     }
 
+    this.shouldRestart = true;
+    this.lastDataTime = 0;
+    this.checkTimeout = 0;
+
     Stream.Duplex.call(this, options);
 }
 

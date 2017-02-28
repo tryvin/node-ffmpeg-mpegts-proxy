@@ -5,7 +5,7 @@ var spawn    = require('child_process').spawn,
 
 module.exports = function avconv(params, binaryPath, environment) {
 	  binaryPath = binaryPath || "avconv";
-    
+
     var stream = new AvStream(),
         // todo: use a queue to deal with the spawn EMFILE exception
         // see http://www.runtime-era.com/2012/10/quick-and-dirty-nodejs-exec-limit-queue.html

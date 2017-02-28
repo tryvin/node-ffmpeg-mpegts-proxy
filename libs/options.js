@@ -20,25 +20,10 @@ var getInputAvconvOptions = function(source) {
 		options = options.concat(source.avconvOptions.input);
 
 	var tmpoptions = [
-		'-re'
+		'-re',
+		'-i',
+		source.source
 	];
-
-	if ( typeof(source.source) == 'string' ) {
-		tmpoptions = tmpoptions.concat([
-			'-i',
-			source.source
-		]);
-	}
-	else {
-		tmpoptions = tmpoptions.concat([
-			"-f", "concat", "-safe", "0"
-		]);
-
-		for( var k in source.source ) {
-			tmpoptions.push("-i");
-			tmpoptions.push(source.source[k]);
-		}
-	}
 
 	return tmpoptions.concat(options);
 };
