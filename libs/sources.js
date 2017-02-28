@@ -34,7 +34,7 @@ var load = function(_filename, cbonSourceChange, cbonParserError, cbonLoad) {
 	onSourceChange = cbonSourceChange;
 	onParserError = cbonParserError;
 	onLoad = cbonLoad;
-	
+
 	_load();
 
 	// Watch the file for changes and reload when changed
@@ -46,7 +46,7 @@ var load = function(_filename, cbonSourceChange, cbonParserError, cbonLoad) {
 };
 
 /**
- * Returns the source that has the specified URL, or null if no such source 
+ * Returns the source that has the specified URL, or null if no such source
  * exists
  * @param {type} url
  * @returns {newSources|sources}
@@ -79,6 +79,7 @@ var _load = function() {
 		var newSources = JSON.parse(fs.readFileSync(filename, 'utf8'));
 	}
 	catch (e) {
+		console.error(e);
 		onParserError(e);
 		return;
 	}
@@ -92,3 +93,6 @@ var _load = function() {
 var exports = module.exports = {};
 exports.getByUrl = getByUrl;
 exports.load = load;
+exports.getSources = function() {
+	return sources;
+}

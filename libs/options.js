@@ -14,17 +14,33 @@ var getAvconvOptions = function(source) {
  * @returns array
  */
 var getInputAvconvOptions = function(source) {
-	var options = [
-		'-re'
-	];
+	var options = [];
 
 	if (source.avconvOptions !== undefined && source.avconvOptions.input !== undefined)
 		options = options.concat(source.avconvOptions.input);
 
-	return options.concat([
-		'-i',
-		source.source
-	]);
+	var tmpoptions = [
+		'-re'
+	];
+
+	if ( typeof(source.source) == 'string' ) {
+		tmpoptions = tmpoptions.concat([
+			'-i',
+			source.source
+		]);
+	}
+	else {
+		tmpoptions = tmpoptions.concat([
+			"-f", "concat", "-safe", "0"
+		]);
+
+		for( var k in source.source ) {
+			tmpoptions.push("-i");
+			tmpoptions.push(source.source[k]);
+		}
+	}
+
+	return tmpoptions.concat(options);
 };
 
 /**
