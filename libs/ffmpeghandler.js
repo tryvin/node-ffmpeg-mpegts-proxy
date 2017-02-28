@@ -126,7 +126,7 @@ module.exports = function(argv, sources) {
                     }
                 });
 
-                handlingUrls[source.url]['stream'].on('exit', function() {
+                handlingUrls[source.url]['stream'].on('exit', function(code) {
                     if ( handlingUrls[source.url] ) {
                         if ( handlingUrls[source.url]['stream'].shouldRestart ) {
                             winston.error('avconv exited with code %d, respawning', code);
@@ -143,6 +143,7 @@ module.exports = function(argv, sources) {
             var source = sources.getByUrl(streamUrl);
 
             if ( typeof(handlingUrls[streamUrl]) == 'undefined' ) {
+                winston.info('[FFMpeg] Starting stream for ' + streamUrl);
                 handlingUrls[streamUrl] = {
                     'stream': null,
                     'clients': [processId]
