@@ -72,108 +72,134 @@ module.exports = function(argv, sources) {
             			avconvBinary = source.avconv;
             		}
 
-                    handlingUrls[source.url]['stream'] = avconv(avconvOptions, avconvBinary, environment);
+                    if ( handlingUrls[source.url] ) {
+                        handlingUrls[source.url]['stream'] = avconv(avconvOptions, avconvBinary, environment);
 
-                    var checkTimeout = 0;
-                    var restartStream = function() {
-                        if ( handlingUrls[source.url] ) {
-                            if ( handlingUrls[source.url]['stream'] ) {
-                                if ( ! noSignalForLoop ) {
-                                    if ( handlingUrls[source.url]['stream'].lastDataTime > 0 ) {
-                                        if ( Date.now() - handlingUrls[source.url]['stream'].startDataTime > 2000 ) {
-                                            winston.info("[FFmpeg] No Feed for 2 seconds");
+                        var checkTimeout = 0;
+                        var restartStream = function() {
+                            if ( handlingUrls[source.url] ) {
+                                if ( handlingUrls[source.url]['stream'] ) {
+                                    if ( ! noSignalForLoop ) {
+                                        if ( handlingUrls[source.url]['stream'].lastDataTime > 0 ) {
+                                            if ( Date.now() - handlingUrls[source.url]['stream'].startDataTime > 2000 ) {
+                                                winston.info("[FFmpeg] No Feed for 2 seconds");
 
-                                            handlingUrls[source.url]['stream'].kill();
-                                            handlingUrls[source.url]['stream'].lastDataTime = 0;
+                                                handlingUrls[source.url]['stream'].kill();
+                                                handlingUrls[source.url]['stream'].lastDataTime = 0;
+                                            }
+                                            else {
+                                                handlingUrls[source.url]['stream'].lastDataTime = Date.now();
+                                                handlingUrls[source.url]['streamCheckTimeout'] = setTimeout(restartStream, 2000);
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        checkUrl(0, urlList, function(sourceUrl, source, noSignalForCheck) {
+                                            if ( handlingUrls[source.url] ) {
+                                                if ( noSignalForCheck ) {
+                                                    if ( handlingUrls[source.url]['streamCheckTimeout'] )
+                                                        clearTimeout(handlingUrls[source.url]['streamCheckTimeout']);
+
+                                                    handlingUrls[source.url]['streamCheckTimeout'] = setTimeout(restartStream, 20000);
+                                                }
+                                                else {
+                                                    if ( handlingUrls[source.url]['streamCheckTimeout'] )
+                                                        clearTimeout(handlingUrls[source.url]['streamCheckTimeout']);
+
+                                                    handlingUrls[source.url]['stream'].shouldRestart = false;
+                                                    handlingUrls[source.url]['stream'].kill();
+
+                                                    handlingUrls[source.url]['streamExitNumber'] = 0;
+
+                                                    source.sourceFoundUrl = sourceUrl;
+                                                    streamingLoop();
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                                else {
+                                    winston.info("[FFMPEG] No source found");
+                                }
+                            }
+                        }
+
+                        handlingUrls[source.url]['stream'].on('message', function(message) {
+                            winston.silly(message);
+                        });
+
+                        handlingUrls[source.url]['stream'].on('data', function(chunk) {
+                            if ( handlingUrls[source.url] ) {
+                                if ( handlingUrls[source.url]['clients'].length > 0 ) {
+
+                                    if ( ! noSignalForLoop ) {
+                                        handlingUrls[source.url]['streamExitNumber'] = 0;
+
+                                        if ( ! handlingUrls[source.url]['streamCheckTimeout'] ) {
+                                            handlingUrls[source.url]['stream'].lastDataTime = Date.now();
+                                            handlingUrls[source.url]['streamCheckTimeout'] = setTimeout(restartStream, 2000);
+                                        }
+                                    }
+
+                                    for(const aId in handlingUrls[source.url]['clients'] ) {
+                                        const clientId = handlingUrls[source.url]['clients'][aId];
+
+                                        if ( cluster.workers[clientId] ) {
+                                            cluster.workers[clientId].send(
+                                                {
+                                                    'cmd': 'streamData',
+                                                    'url': source.url,
+                                                    'data': chunk
+                                                }
+                                            );
                                         }
                                         else {
-                                            handlingUrls[source.url]['stream'].lastDataTime = Date.now();
-                                            handlingUrls[source.url]['stream'].checkTimeout = setTimeout(restartStream, 2000);
+                                            __this.stopStream(source.url, clientId);
                                         }
-                                    }
-                                    else {
-                                        winston.error("[FFmpeg] Source not found on check");
-                                        handlingUrls[source.url]['stream'].checkTimeout = 0;
                                     }
                                 }
                                 else {
-                                    checkUrl(0, urlList, function(sourceUrl, source, noSignal) {
-                                        if ( handlingUrls[source.url] ) {
-                                            if ( noSignal )
-                                                handlingUrls[source.url]['stream'].checkTimeout = setTimeout(restartStream, 20000);
-                                            else {
-                                                handlingUrls[source.url]['stream'].shouldRestart = false;
-                                                handlingUrls[source.url]['stream'].kill();
-
-                                                source.sourceFoundUrl = sourceUrl;
-                                                streamingLoop();
-                                            }
-                                        }
-                                    });
+                                    __this.stopStream(source.url, false);
                                 }
                             }
+                        });
+
+                        if ( noSignalForLoop ) {
+                            if ( handlingUrls[source.url]['streamCheckTimeout'] )
+                                clearTimeout(handlingUrls[source.url]['streamCheckTimeout']);
+
+                            restartStream();
                         }
+
+                        handlingUrls[source.url]['stream'].on('error', function() {
+                            if ( handlingUrls[source.url] ) {
+                                handlingUrls[source.url]['stream'].kill();
+                            }
+                        });
+
+                        handlingUrls[source.url]['stream'].on('exit', function(code) {
+                            if ( handlingUrls[source.url] ) {
+                                if ( handlingUrls[source.url]['stream'] ) {
+                                    if ( handlingUrls[source.url]['stream'].shouldRestart ) {
+                                        winston.error('avconv exited with code %s, respawning', code);
+
+                                        if ( handlingUrls[source.url]['streamExitNumber'] > 4 ) {
+                                            handlingUrls[source.url]['streamExitNumber'] = 0;
+
+                                            if ( handlingUrls[source.url]['streamCheckTimeout'] )
+                                                clearTimeout(handlingUrls[source.url]['streamCheckTimeout']);
+
+                                            streamingLoop(true);
+                                        }
+                                        else {
+                                            handlingUrls[source.url]['streamExitNumber']++;
+                                            streamingLoop();
+                                        }
+                                    }
+                                }
+                            }
+                        });
                     }
-
-                    handlingUrls[source.url]['stream'].on('message', function(message) {
-                        winston.silly(message);
-                    });
-
-                    handlingUrls[source.url]['stream'].on('data', function(chunk) {
-                        if ( handlingUrls[source.url] ) {
-                            if ( handlingUrls[source.url]['clients'].length > 0 ) {
-
-                                handlingUrls[source.url]['stream'].exitNumber = 0;
-
-                                if ( ! handlingUrls[source.url]['stream'].checkTimeout ) {
-                                    handlingUrls[source.url]['stream'].lastDataTime = Date.now();
-                                    handlingUrls[source.url]['stream'].checkTimeout = setTimeout(restartStream, 2000);
-                                }
-
-                                for(const aId in handlingUrls[source.url]['clients'] ) {
-                                    const clientId = handlingUrls[source.url]['clients'][aId];
-
-                                    if ( cluster.workers[clientId] ) {
-                                        cluster.workers[clientId].send(
-                                            {
-                                                'cmd': 'streamData',
-                                                'url': source.url,
-                                                'data': chunk
-                                            }
-                                        );
-                                    }
-                                    else {
-                                        __this.stopStream(source.url, clientId);
-                                    }
-                                }
-                            }
-                            else {
-                                __this.stopStream(source.url, false);
-                            }
-                        }
-                    });
-
-                    handlingUrls[source.url]['stream'].on('error', function() {
-                        if ( handlingUrls[source.url] ) {
-                            handlingUrls[source.url]['stream'].kill();
-                        }
-                    });
-
-                    handlingUrls[source.url]['stream'].on('exit', function(code) {
-                        if ( handlingUrls[source.url] ) {
-                            if ( handlingUrls[source.url]['stream'].shouldRestart ) {
-                                winston.error('avconv exited with code %d, respawning', code);
-
-                                if ( handlingUrls[source.url]['stream'].exitNumber > 4 ) {
-                                    streamingLoop(true);
-                                }
-                                else {
-                                    handlingUrls[source.url]['stream'].exitNumber++;
-                                    streamingLoop();
-                                }
-                            }
-                        }
-                    });
                 }
 
                 streamingLoop(noSignal);
@@ -222,7 +248,7 @@ module.exports = function(argv, sources) {
                             }
                             else {
                                 if ( urlList.length > urlId + 1 )
-                                    checkUrl(urlId + 1, urlList);
+                                    checkUrl(urlId + 1, urlList, successCallback);
                                 else {
                                     if ( ! successCallback )
                                         startStreamFromUrl(urlList[urlId], source, true);
@@ -241,7 +267,7 @@ module.exports = function(argv, sources) {
                         }
                         else {
                             if ( urlList.length > urlId + 1 )
-                                checkUrl(urlId + 1, urlList);
+                                checkUrl(urlId + 1, urlList, successCallback);
                             else {
                                 if ( ! successCallback )
                                     startStreamFromUrl(urlList[urlId], source, true);
@@ -250,13 +276,22 @@ module.exports = function(argv, sources) {
                             }
                         }
                     }).catch(function(error) {
-                        if ( urlList.length > urlId + 1 )
-                            checkUrl(urlId + 1, urlList);
-                        else {
+                        //Akamai doesn't like HEAD, so they return 405, we assume it's ok to go
+                        if ( error.statusCode == 405 ) {
                             if ( ! successCallback )
-                                startStreamFromUrl(urlList[urlId], source, true);
+                                startStreamFromUrl(urlList[urlId], source);
                             else
-                                successCallback(urlList[urlId], source, true);
+                                successCallback(urlList[urlId], source);
+                        }
+                        else {
+                            if ( urlList.length > urlId + 1 )
+                                checkUrl(urlId + 1, urlList, successCallback);
+                            else {
+                                if ( ! successCallback )
+                                    startStreamFromUrl(urlList[urlId], source, true);
+                                else
+                                    successCallback(urlList[urlId], source, true);
+                            }
                         }
                     });
                 }
@@ -275,6 +310,8 @@ module.exports = function(argv, sources) {
                 winston.info('[FFMpeg] Starting stream for ' + streamUrl);
                 handlingUrls[streamUrl] = {
                     'stream': null,
+                    'streamExitNumber': 0,
+                    'streamCheckTimeout': 0,
                     'clients': [processId]
                 };
 

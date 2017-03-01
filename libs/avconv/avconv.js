@@ -43,7 +43,7 @@ module.exports = function avconv(params, binaryPath, environment) {
     });
 
     stream.kill = function() {
-        avconv.kill();
+        return avconv.kill();
     };
 
     return stream;
