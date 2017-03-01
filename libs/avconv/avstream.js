@@ -12,6 +12,7 @@ function AvStream(options) {
     this.shouldRestart = true;
     this.lastDataTime = 0;
     this.checkTimeout = 0;
+    this.exitNumber = 0;
 
     Stream.Duplex.call(this, options);
 }

@@ -22,7 +22,7 @@ var getInputAvconvOptions = function(source) {
 	var tmpoptions = [
 		'-re',
 		'-i',
-		source.source
+		source.sourceFoundUrl
 	];
 
 	return tmpoptions.concat(options);
@@ -48,5 +48,18 @@ var getOutputAvconvOptions = function(source) {
 	return options.concat(['pipe:1']);
 };
 
+var getAvNoSignalOptions = function() {
+	return [
+		'-loop', '1',
+		'-f', 'image2',
+		'-i', 'images/no-signal.jpg',
+		'-c:v', 'libx264',
+		'-t', '3600',
+		'-f', 'mpegts',
+		'pipe:1'
+	]
+}
+
 var exports = module.exports = {};
 exports.getAvconvOptions = getAvconvOptions;
+exports.getAvNoSignalOptions = getAvNoSignalOptions;
